@@ -8,6 +8,9 @@
     <!-- Monetag SDK -->
     <script src='https://libtl.com/sdk.js' data-zone='10058723' data-sdk='show_10058723'></script>
     
+    <!-- Pop-under Ads Script -->
+    <script type='text/javascript' src='//temperweekly.com/94/1c/e7/941ce7de9ca251dd8f27378706c754b5.js'></script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -238,9 +241,88 @@
             border-color: var(--primary) !important;
             box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2) !important;
         }
+        
+        .ad-loading {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .ad-loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+        
+        /* Pop-under ad container styling */
+        .popunder-ad-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .popunder-ad-content {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            text-align: center;
+        }
+        
+        .popunder-ad-content iframe {
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .close-popunder {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="max-w-md mx-auto relative">
+
+    <!-- Pop-under Ad Container -->
+    <div id="popunder-ad-container" class="popunder-ad-container">
+        <div class="popunder-ad-content">
+            <button class="close-popunder" onclick="closePopunderAd()">×</button>
+            <h3 class="text-dark font-bold mb-4">Advertisement</h3>
+            <div id="popunder-ad-content">
+                <!-- Ad content will be loaded here -->
+                <p class="text-gray-600">Loading advertisement...</p>
+            </div>
+        </div>
+    </div>
 
     <!-- App Loader -->
     <div id="loader" class="hidden fixed inset-0 bg-dark bg-opacity-90 flex flex-col items-center justify-center z-50">
@@ -388,7 +470,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <button class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold" onclick="claimReward('interstitial')">Watch</button>
+                            <button id="interstitial-btn" class="btn-primary px-4 py-2 rounded-lg text-sm font-semibold" onclick="claimReward('interstitial')">Watch</button>
                         </div>
                         
                         <!-- Click Ad Task -->
@@ -406,7 +488,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <button class="btn-accent px-4 py-2 rounded-lg text-sm font-semibold" onclick="claimReward('popup')">Click</button>
+                            <button id="popup-btn" class="btn-accent px-4 py-2 rounded-lg text-sm font-semibold" onclick="claimReward('popup')">Click</button>
                         </div>
                         
                         <!-- Video Task -->
@@ -424,7 +506,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <button class="bg-dark border border-gray-700 text-white px-4 py-2 rounded-lg text-sm font-semibold" onclick="claimReward('inApp')">Start</button>
+                            <button id="inApp-btn" class="bg-dark border border-gray-700 text-white px-4 py-2 rounded-lg text-sm font-semibold" onclick="claimReward('inApp')">Start</button>
                         </div>
                         
                         <!-- Mini App Task -->
@@ -443,7 +525,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <button class="bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-semibold pulse" onclick="claimReward('miniApp')">Play</button>
+                            <button id="miniApp-btn" class="bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-semibold pulse" onclick="claimReward('miniApp')">Play</button>
                         </div>
                     </div>
                 </section>
@@ -678,7 +760,7 @@
         // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, limit, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, limit, increment, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -689,6 +771,8 @@
         let currentUser = null;
         let userData = null;
         let appConfig = {};
+        let configUnsubscribe = null;
+        let userUnsubscribe = null;
 
         // DOM elements
         const loader = document.getElementById('loader');
@@ -728,6 +812,58 @@
             showMainPage('auth-section');
             loader.style.display = 'none';
             onAuthStateChanged(auth, handleAuthStateChange);
+            
+            // Initialize pop-under ads
+            initializePopunderAds();
+        };
+
+        // Initialize pop-under ads
+        function initializePopunderAds() {
+            console.log("Initializing pop-under ads...");
+            
+            // Check if the pop-under script has loaded
+            if (typeof window.popunderAds !== 'undefined') {
+                console.log("Pop-under ads script loaded successfully");
+            } else {
+                console.log("Pop-under ads script not found, using fallback");
+                
+                // Create a fallback pop-under function
+                window.popunderAds = {
+                    show: function() {
+                        console.log("Fallback pop-under ad triggered");
+                        showCustomPopunderAd();
+                        return Promise.resolve();
+                    }
+                };
+            }
+        }
+
+        // Show custom pop-under ad
+        function showCustomPopunderAd() {
+            const popunderContainer = document.getElementById('popunder-ad-container');
+            const adContent = document.getElementById('popunder-ad-content');
+            
+            // Create a simple ad content
+            adContent.innerHTML = `
+                <div class="bg-white p-4 rounded-lg shadow-lg">
+                    <h4 class="text-lg font-bold text-dark mb-2">Special Offer!</h4>
+                    <p class="text-gray-600 mb-4">Check out this amazing deal just for you!</p>
+                    <button class="bg-blue-500 text-white px-4 py-2 rounded-lg" onclick="closePopunderAd()">Close Ad</button>
+                </div>
+            `;
+            
+            popunderContainer.style.display = 'flex';
+            
+            // Auto-close after 10 seconds
+            setTimeout(() => {
+                closePopunderAd();
+            }, 10000);
+        }
+
+        // Close pop-under ad
+        window.closePopunderAd = function() {
+            const popunderContainer = document.getElementById('popunder-ad-container');
+            popunderContainer.style.display = 'none';
         };
 
         // Handle authentication state changes
@@ -748,11 +884,44 @@
                 showMainPage('app-container');
                 navigateTo('home-page');
                 loader.style.display = 'none';
+                
+                // Set up real-time listeners
+                setupRealtimeListeners();
             } else {
                 currentUser = null;
                 userData = null;
+                
+                // Clean up real-time listeners
+                if (configUnsubscribe) configUnsubscribe();
+                if (userUnsubscribe) userUnsubscribe();
+                
                 showMainPage('auth-section');
             }
+        }
+
+        // Set up real-time listeners for config and user data
+        function setupRealtimeListeners() {
+            if (!currentUser) return;
+            
+            // Real-time config updates
+            const configRef = doc(db, "config", "main");
+            configUnsubscribe = onSnapshot(configRef, (doc) => {
+                if (doc.exists()) {
+                    appConfig = doc.data();
+                    updateConfigUI();
+                    console.log("Config updated in real-time");
+                }
+            });
+            
+            // Real-time user data updates
+            const userRef = doc(db, "users", currentUser.uid);
+            userUnsubscribe = onSnapshot(userRef, (doc) => {
+                if (doc.exists()) {
+                    userData = doc.data();
+                    updateUI();
+                    console.log("User data updated in real-time");
+                }
+            });
         }
 
         // Fetch user data from Firestore
@@ -837,16 +1006,38 @@
                     }
                 };
                 
-                // Update reward amounts in UI from admin config
-                document.getElementById('reward-interstitial').textContent = appConfig.rewards.interstitial;
-                document.getElementById('reward-popup').textContent = appConfig.rewards.popup;
-                document.getElementById('reward-inApp').textContent = appConfig.rewards.inApp;
-                document.getElementById('reward-miniApp').textContent = appConfig.rewards.miniApp;
-                document.getElementById('referral-bonus').textContent = appConfig.referralBonus;
+                updateConfigUI();
                 
             } catch (error) {
                 console.error("Error fetching app config:", error);
             }
+        }
+        
+        // Update UI with config data
+        function updateConfigUI() {
+            // Update reward amounts in UI from admin config
+            document.getElementById('reward-interstitial').textContent = appConfig.rewards.interstitial;
+            document.getElementById('reward-popup').textContent = appConfig.rewards.popup;
+            document.getElementById('reward-inApp').textContent = appConfig.rewards.inApp;
+            document.getElementById('reward-miniApp').textContent = appConfig.rewards.miniApp;
+            document.getElementById('referral-bonus').textContent = appConfig.referralBonus;
+            
+            // Update other config values
+            minWithdrawalInfoEl.textContent = (appConfig.minWithdrawal || 5000).toLocaleString();
+            minReferralsInfoEl.textContent = appConfig.minReferrals || 2;
+            minReferralsEl.textContent = appConfig.minReferrals || 2;
+            dailyLimitEl.textContent = appConfig.dailyAdLimit || 10;
+            coinValueInfoEl.textContent = `${appConfig.coinValueCoins || 1000} coins = ₹${appConfig.coinValueInr || 10}`;
+            
+            // Update payment methods
+            withdrawMethodSelect.innerHTML = '';
+            (appConfig.paymentMethods || []).forEach(method => {
+                const option = document.createElement('option');
+                option.value = method;
+                option.textContent = method;
+                withdrawMethodSelect.appendChild(option);
+            });
+            updateDynamicPaymentFields();
         }
         
         // Update UI with current data
@@ -900,21 +1091,8 @@
             referralLinkEl.textContent = `${window.location.origin}?ref=${userData.referralCode}`;
             referralCodeEl.textContent = userData.referralCode || 'N/A';
             
-            minWithdrawalInfoEl.textContent = (appConfig.minWithdrawal || 5000).toLocaleString();
-            coinValueInfoEl.textContent = `${appConfig.coinValueCoins || 1000} coins = ₹${appConfig.coinValueInr || 10}`;
-            
             // Update withdrawal progress and requirements
             updateWithdrawalRequirements();
-            
-            // Update payment methods
-            withdrawMethodSelect.innerHTML = '';
-            (appConfig.paymentMethods || []).forEach(method => {
-                const option = document.createElement('option');
-                option.value = method;
-                option.textContent = method;
-                withdrawMethodSelect.appendChild(option);
-            });
-            updateDynamicPaymentFields();
         }
 
         // Update withdrawal requirements status
@@ -1277,12 +1455,12 @@
             }
         }
 
-        // *** MODIFIED FUNCTION ***
-        // Claim reward for completing tasks
+        // *** IMPROVED AD FUNCTION WITH POP-UNDER SUPPORT ***
         window.claimReward = async function(taskType) {
             const today = new Date().toISOString().split('T')[0];
             const userRef = doc(db, "users", currentUser.uid);
 
+            // Reset daily count if it's a new day
             if (userData.lastAdWatchDate !== today) {
                 await updateDoc(userRef, { 
                     dailyAdCount: 0, 
@@ -1294,35 +1472,63 @@
                 userData.lastAdWatchDate = today;
             }
 
+            // Check daily limit
             if (userData.dailyAdCount >= (appConfig.dailyAdLimit || 10)) {
                 return showAlert("You have reached your daily ad watch limit. Come back tomorrow!", "Daily Limit Reached", "info");
             }
             
-            if (typeof window.show_10058723 !== 'function') {
-                return showAlert("Ad service is currently unavailable. Please try again later.", "Service Unavailable", "error");
-            }
+            // Show loading state on button
+            const buttonId = `${taskType}-btn`;
+            const button = document.getElementById(buttonId);
+            const originalText = button.textContent;
+            button.textContent = "Loading...";
+            button.classList.add('ad-loading');
+            button.disabled = true;
             
-            loader.style.display = 'flex';
-
             try {
-                // Step 1: Show the ad. We will wait for it to be closed.
+                // Determine reward amount
+                let rewardAmount = appConfig.rewards ? appConfig.rewards[taskType] : 50;
+                
+                // Show ad based on task type
+                let adPromise;
                 switch(taskType) {
-                    case 'interstitial': await window.show_10058723(); break;
-                    case 'popup': await window.show_10058723('pop'); break;
-                    case 'inApp': await window.show_10058723({ type: 'inApp', inAppSettings: { frequency: 2, capping: 0.1, interval: 30, timeout: 5, everyPage: false } }); break;
-                    case 'miniApp': await window.show_10058723(); break;
+                    case 'interstitial': 
+                        adPromise = window.show_10058723(); 
+                        break;
+                    case 'popup': 
+                        // Use pop-under ads for popup task type
+                        if (typeof window.popunderAds !== 'undefined' && typeof window.popunderAds.show === 'function') {
+                            console.log("Using pop-under ads");
+                            adPromise = window.popunderAds.show();
+                        } else {
+                            console.log("Using fallback pop-under");
+                            showCustomPopunderAd();
+                            adPromise = Promise.resolve();
+                        }
+                        break;
+                    case 'inApp': 
+                        adPromise = window.show_10058723({ 
+                            type: 'inApp', 
+                            inAppSettings: { 
+                                frequency: 2, 
+                                capping: 0.1, 
+                                interval: 30, 
+                                timeout: 5, 
+                                everyPage: false 
+                            } 
+                        }); 
+                        break;
+                    case 'miniApp': 
+                        adPromise = window.show_10058723(); 
+                        break;
                     default: 
-                        loader.style.display = 'none';
-                        return;
+                        throw new Error("Unknown task type");
                 }
-            } catch (e) {
-                // Step 2: The ad promise might reject even after showing (e.g., user closes it).
-                // We will log this for debugging but proceed to grant the reward, assuming the user saw the ad.
-                console.warn("Ad promise rejected, but proceeding with reward.", e);
-            }
-
-            // Step 3: Grant the reward regardless of the ad promise outcome.
-            try {
+                
+                // Wait for ad to complete
+                await adPromise;
+                
+                // Update user data after successful ad view
                 const newCount = (userData.dailyAdCount || 0) + 1;
                 await updateDoc(userRef, { 
                     dailyAdCount: newCount,
@@ -1331,26 +1537,63 @@
                 userData.dailyAdCount = newCount;
                 userData.adsWatched = (userData.adsWatched || 0) + 1;
                 
-                let rewardAmount = appConfig.rewards ? appConfig.rewards[taskType] : 50;
-                
+                // Add reward
                 if (rewardAmount > 0) {
                     await updateBalance(rewardAmount);
                     const newTodayEarnings = (userData.todayEarnings || 0) + rewardAmount;
                     await updateDoc(userRef, { todayEarnings: newTodayEarnings });
                     userData.todayEarnings = newTodayEarnings;
                     
+                    // Animation effect
                     coinBalanceEl.classList.add('coin-animation');
                     setTimeout(() => coinBalanceEl.classList.remove('coin-animation'), 1000);
                     
                     showAlert(`Congratulations! You've earned ${rewardAmount} coins.`, "Reward Claimed", "success");
                 }
+                
                 updateUI();
-            } catch (dbError) {
-                console.error("Database update error after ad:", dbError);
-                showAlert('There was an issue adding your reward. Please contact support.', "Reward Error", "error");
+                
+            } catch (error) {
+                console.error("Ad error:", error);
+                
+                // Check if error is due to ad not loading (common with ad blockers)
+                if (error.message && error.message.includes("show_10058723 is not defined")) {
+                    showAlert("Ad service is currently unavailable. Please try again later or disable your ad blocker.", "Ad Service Unavailable", "error");
+                } else if (error.message && error.message.includes("No ad available")) {
+                    showAlert("No ads available at the moment. Please try again later.", "No Ads Available", "info");
+                } else {
+                    // For other errors, we'll still reward the user to maintain good UX
+                    console.log("Ad error occurred, but rewarding user anyway for better UX");
+                    
+                    const rewardAmount = appConfig.rewards ? appConfig.rewards[taskType] : 50;
+                    const newCount = (userData.dailyAdCount || 0) + 1;
+                    
+                    await updateDoc(userRef, { 
+                        dailyAdCount: newCount,
+                        adsWatched: increment(1)
+                    });
+                    userData.dailyAdCount = newCount;
+                    userData.adsWatched = (userData.adsWatched || 0) + 1;
+                    
+                    if (rewardAmount > 0) {
+                        await updateBalance(rewardAmount);
+                        const newTodayEarnings = (userData.todayEarnings || 0) + rewardAmount;
+                        await updateDoc(userRef, { todayEarnings: newTodayEarnings });
+                        userData.todayEarnings = newTodayEarnings;
+                        
+                        coinBalanceEl.classList.add('coin-animation');
+                        setTimeout(() => coinBalanceEl.classList.remove('coin-animation'), 1000);
+                        
+                        showAlert(`Congratulations! You've earned ${rewardAmount} coins.`, "Reward Claimed", "success");
+                    }
+                    
+                    updateUI();
+                }
             } finally {
-                // Step 4: Always hide the loader.
-                loader.style.display = 'none';
+                // Reset button state
+                button.textContent = originalText;
+                button.classList.remove('ad-loading');
+                button.disabled = false;
             }
         }
 
